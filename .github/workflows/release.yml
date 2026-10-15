@@ -34,7 +34,8 @@ jobs:
           }
           "tag=$tag" >> $env:GITHUB_OUTPUT
       - run: npm ci --include=dev
-      - run: (cd src-tauri; cargo test)
+      - run: cargo test
+        working-directory: src-tauri
       - run: npx tauri build --bundles nsis
         env:
           # signiert das Update (.sig); den passenden oeffentlichen Schluessel prueft die App
