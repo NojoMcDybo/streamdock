@@ -107,6 +107,8 @@ Eigenständige Tauri-2-App für Windows. Ersetzt das AutoHotkey-Skript `D:\Dev\t
 
 Erledigt seit dem ersten Plan: Tray mit Live-Liste und „X ist live“-Meldung, Selbst-Update, Mehrmonitor-Betrieb, Erweiterungsordner (Laden getestet), Fenster ohne Leiste mit Glas-Pille, Favoriten-Sortierung nach Schauzeit, Werbung stummschalten, neue Einrichtung (Kopierknöpfe, Farbspiel), neues Symbol. Rechte der Twitch-Fenster auf Fenstersteuerung beschränkt (App-Manifest), Prüfung in `tasks/security-review-0.2.0.md`.
 
+0.2.1: Liste ohne Gruppenüberschriften (nur Sortierung und ★-Zeit), Zurück-Knopf im Player (`show_menu`).
+
 ## Offen
 
 - Werbung: nur Stummschaltung (Erkennung mit echter Werbung nicht beobachtet, in 9 Minuten kam keine). Entfernen/Überspringen bewusst nicht gebaut (siehe README, Abschnitt Grenzen).

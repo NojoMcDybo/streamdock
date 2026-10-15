@@ -1,6 +1,6 @@
 // Wird in jede Twitch-Seite der Player- und Chat-Fenster eingesetzt (Rust: stream.rs, `initialization_script`).
 // Die Fenster haben keine Titelleiste. Stattdessen:
-//  - Beim Hovern am oberen Rand fährt eine Glas-Pille herunter (Anheften, Vollbild, Minimieren, Schließen); der Streifen
+//  - Beim Hovern am oberen Rand fährt eine Glas-Pille herunter (Zurück zur Auswahl, Anheften, Vollbild, Minimieren, Schließen); der Streifen
 //    darunter zieht das Fenster, Ränder und Ecken ändern die Größe.
 //  - Im Player wird Werbung erkannt und der Ton stumm geschaltet (Hinweis „Werbung · stumm“), danach kommt der Ton zurück.
 // Die Seite darf über die Tauri-Brücke nur Fenstersteuerung aufrufen (capabilities/twitch-windows.json), keine App-Befehle.
@@ -15,6 +15,7 @@
   const win = (cmd, args) => bridge.invoke('plugin:window|' + cmd, Object.assign({ label }, args)).catch(() => undefined);
 
   const ICON = {
+    back: `__ICON_BACK__`,
     close: `__ICON_CLOSE__`,
     min: `__ICON_MIN__`,
     full: `__ICON_FULLSCREEN__`,
@@ -86,8 +87,23 @@
     return b;
   };
 
+  // Zurück zur Auswahl (nur Player): das Menü kommt nach vorn, der Stream läuft weiter, bis dort ein anderer gewählt wird.
+  // Vorher Vollbild und Immer-oben aufheben, sonst bliebe das Menü hinter dem Player.
+  if (!isChat) {
+    button('back', '', 'Zurück zur Auswahl', ICON.back, async () => {
+      if (full) await setFull(false);
+      if (pinned) await setPin(false);
+      bridge.invoke('show_menu').catch(() => undefined);
+    });
+  }
+
   let pinned = false;
-  button('pin', '', 'Immer im Vordergrund', ICON.pin, (b) => { pinned = !pinned; b.classList.toggle('on', pinned); win('set_always_on_top', { value: pinned }); });
+  const setPin = (value) => {
+    pinned = value;
+    pill.querySelector('[data-name=pin]').classList.toggle('on', pinned);
+    return win('set_always_on_top', { value });
+  };
+  button('pin', '', 'Immer im Vordergrund', ICON.pin, () => setPin(!pinned));
 
   let full = false;
   const setFull = (value) => {
@@ -95,7 +111,7 @@
     host.classList.toggle('full', full);
     const b = pill.querySelector('[data-name=full]');
     if (b) b.innerHTML = full ? ICON.fullExit : ICON.full;
-    win('set_fullscreen', { value });
+    return win('set_fullscreen', { value });
   };
   if (!isChat) button('full', '', 'Vollbild', ICON.full, () => setFull(!full));
   button('min', '', 'Minimieren', ICON.min, () => win('minimize'));

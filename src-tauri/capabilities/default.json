@@ -11,6 +11,7 @@
     "core:window:allow-toggle-maximize",
     "allow-start-stream",
     "allow-open-console",
+    "allow-show-menu",
     "allow-update-state",
     "allow-update-check",
     "allow-update-install",

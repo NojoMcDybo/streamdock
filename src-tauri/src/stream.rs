@@ -120,6 +120,7 @@ fn extensions_dir(app: &AppHandle) -> Option<PathBuf> {
 /// Oberfläche über dem Bild (overlay.js) mit den Nojo-Symbolen eingesetzt.
 fn overlay_script() -> String {
     include_str!("overlay.js")
+        .replace("__ICON_BACK__", include_str!("../../src/nojo/icons/back.svg").trim())
         .replace("__ICON_CLOSE__", include_str!("../../src/nojo/icons/close.svg").trim())
         .replace("__ICON_MIN__", include_str!("../../src/nojo/icons/min.svg").trim())
         .replace("__ICON_FULLSCREEN_EXIT__", include_str!("../../src/nojo/icons/fullscreen-exit.svg").trim())
@@ -244,12 +245,12 @@ pub fn start(app: &AppHandle, input: &str) -> Result<(), String> {
     #[cfg(debug_assertions)]
     if std::env::var_os("STREAMDOCK_PROBE").is_some() {
         // Prüft, was die Twitch-Seite über die Brücke aufrufen darf: Ergebnis erscheint als Seitentitel im Log.
-        // Erwartet: App-Befehle und Ereignisse abgewiesen, Fenstersteuerung erlaubt.
+        // Erwartet: App-Befehle (außer show_menu) und Ereignisse abgewiesen, Fenstersteuerung und show_menu erlaubt.
         let probe = r#"(async()=>{const I=window.__TAURI_INTERNALS__;if(!I||!I.invoke){document.title='PROBE kein-IPC';return}
             const label=I.metadata.currentWindow.label;const out=[];
             const tries=[['start_stream',{channel:'%%'}],['twitch_state',{}],['live_streams',{}],['logout',{}],['update_install',{}],['open_console',{}],
               ['plugin:window|set_title',{label,value:'x'}],['plugin:window|hide',{label:'main'}],['plugin:event|listen',{event:'auth',target:{kind:'Any'},handler:1}],
-              ['plugin:window|set_always_on_top',{label,value:false}],['plugin:window|set_fullscreen',{label,value:false}]];
+              ['plugin:window|set_always_on_top',{label,value:false}],['plugin:window|set_fullscreen',{label,value:false}],['show_menu',{}]];
             for(const [c,a] of tries){try{await I.invoke(c,a);out.push(c+'=ERLAUBT')}catch(e){out.push(c+'='+(/not allowed|denied|Plugin not found|permission/i.test(String(e))?'abgewiesen':'Fehler:'+String(e).slice(0,30)))}}
             document.title='PROBE '+out.join(' | ');})()"#;
         let _ = player.eval(probe);

@@ -245,18 +245,12 @@ async function refresh(initial: boolean) {
     if (!list.length) return showEmpty();
     const focus = (document.activeElement as HTMLElement | null)?.dataset?.login;
     const grid = h("div", "grid");
-    const favs = list.filter((s) => s.watched >= 60); // Liste kommt schon nach Schauzeit sortiert
-    const both = favs.length > 0 && favs.length < list.length;
-    if (both) grid.append(h("div", "group n-eyebrow", "Deine Favoriten"));
-    list.forEach((s, i) => {
-      if (both && i === favs.length) grid.append(h("div", "group n-eyebrow", "Weitere live"));
-      grid.append(card(s));
-    });
+    list.forEach((s) => grid.append(card(s))); // eine durchgehende Liste, schon nach Schauzeit sortiert
     show(grid);
     shown = list.length;
     count.textContent = `${list.length} live`;
     const typing = document.activeElement instanceof HTMLInputElement;
-    const target = (focus && grid.querySelector<HTMLElement>(`[data-login="${CSS.escape(focus)}"]`)) || (!typing && initial ? grid.querySelector(".card") : null);
+    const target = (focus && grid.querySelector<HTMLElement>(`[data-login="${CSS.escape(focus)}"]`)) || (!typing && initial ? grid.firstElementChild : null);
     (target as HTMLElement | null)?.focus({ preventScroll: true });
   } catch (e) {
     if (mine !== seq) return;

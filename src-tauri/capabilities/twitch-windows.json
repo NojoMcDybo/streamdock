@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "twitch-windows",
-  "description": "Player und Chat zeigen Twitch-Seiten (nur https://*.twitch.tv). Sie dürfen ausschließlich ihre Fenster steuern (Ziehen, Größe, Minimieren, Vollbild, Immer-oben, Schließen), keine App-Befehle und keine Ereignisse.",
+  "description": "Player und Chat zeigen Twitch-Seiten (nur https://*.twitch.tv). Sie dürfen ausschließlich ihre Fenster steuern (Ziehen, Größe, Minimieren, Vollbild, Immer-oben, Schließen) und mit dem einen App-Befehl show_menu das Menü nach vorn holen (Zurück-Knopf), sonst keine App-Befehle und keine Ereignisse.",
   "windows": ["player-*", "chat-*"],
   "remote": { "urls": ["https://*.twitch.tv/*", "https://twitch.tv/*"] },
   "permissions": [
@@ -10,6 +10,7 @@
     "core:window:allow-minimize",
     "core:window:allow-close",
     "core:window:allow-set-fullscreen",
-    "core:window:allow-set-always-on-top"
+    "core:window:allow-set-always-on-top",
+    "allow-show-menu"
   ]
 }

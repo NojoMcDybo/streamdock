@@ -52,6 +52,13 @@ fn open_console() {
     let _ = tauri_plugin_opener::open_url("https://dev.twitch.tv/console/apps", None::<&str>);
 }
 
+/// Holt das Menü nach vorn (Zurück-Knopf im Player). Der einzige App-Befehl, den Fenster mit Twitch-Inhalt aufrufen
+/// dürfen: ohne Parameter, tut immer nur dies.
+#[tauri::command]
+fn show_menu(app: AppHandle) {
+    show_main(&app);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -65,6 +72,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             start_stream,
             open_console,
+            show_menu,
             update::update_state,
             update::update_check,
             update::update_install,
@@ -154,14 +162,14 @@ mod tests {
         assert!(handler.len() >= 10);
     }
 
-    /// Fenster mit Twitch-Inhalt dürfen nur Fenstersteuerung, keine App-Befehle und keine Ereignisse.
+    /// Fenster mit Twitch-Inhalt dürfen nur Fenstersteuerung und `show_menu`, keine anderen App-Befehle und keine Ereignisse.
     #[test]
     fn twitch_fenster_haben_nur_fenstersteuerung() {
         let caps: serde_json::Value = serde_json::from_str(include_str!("../capabilities/twitch-windows.json")).unwrap();
         let perms: Vec<&str> = caps["permissions"].as_array().unwrap().iter().filter_map(|p| p.as_str()).collect();
         assert!(!perms.is_empty());
         for p in &perms {
-            assert!(p.starts_with("core:window:allow-"), "unerwartete Berechtigung für Twitch-Fenster: {p}");
+            assert!(p.starts_with("core:window:allow-") || *p == "allow-show-menu", "unerwartete Berechtigung für Twitch-Fenster: {p}");
         }
         for forbidden in ["allow-hide", "allow-set-title", "allow-destroy", "allow-set-focus", "allow-set-position"] {
             assert!(!perms.iter().any(|p| p.ends_with(forbidden)), "{forbidden} darf nicht erlaubt sein");

@@ -34,6 +34,11 @@ Frage: Kann eine Twitch-Seite (oder ein Skript darin: Drittanbieter-Code, kompro
 - **Overlay-Skript:** keine Nutzdaten in `innerHTML` (nur feste Symbole), Stilblatt per `adoptedStyleSheets` (unabhängig von der Seiten-CSP), läuft nur im obersten Fenster der Seite, Tauri-Brücke wird nur benutzt, wenn vorhanden.
 - **Debug-Hilfen:** alle hinter `cfg(debug_assertions)` bzw. `cfg!(debug_assertions)` (`stream.rs`, `watch.rs`, `store.rs`, `tray.rs`). **Release-Prüfung (Binärsuche in `target\release\streamdock.exe`, 15.10.2026 20:13, 8,7 MB):** keiner der Namen `STREAMDOCK_EVAL_FILE`, `STREAMDOCK_PROBE`, `STREAMDOCK_DATA_DIR`, `STREAMDOCK_MUTED`, `STREAMDOCK_FAKE_LIVE`, `STREAMDOCK_POLL_SECS` und kein Text mit `STREAMDOCK_` ist enthalten; Gegenprobe: im Debug-Build ist `STREAMDOCK_EVAL_FILE` vorhanden, die Suche erkennt also. Das Overlay-Skript (`__sdOverlay`) ist erwartungsgemäß enthalten. Der Release-Build kennt damit weder Datenordner-Umleitung noch Skript-Ausführung aus Dateien noch die Berechtigungs-Probe.
 
+## Nachtrag: Zurück-Knopf (`show_menu`)
+
+Der Zurück-Knopf im Player ruft den neuen App-Befehl `show_menu` auf. Das ist der **einzige** App-Befehl, den die Twitch-Fenster aufrufen dürfen (`allow-show-menu` in `capabilities/twitch-windows.json`). Er hat keinen Parameter und tut nur `show_main` (Menü entminimieren, zeigen, fokussieren); eine Twitch-Seite gewinnt damit keine Daten und keine Wahl des Ziels. Nebenwirkung für Seiten mit Schadcode: sie können das Menü in den Vordergrund holen (Belästigung, Täuschung wie Befund 2). Alternative wäre `core:window:allow-show`/`allow-set-focus` gewesen: die wirken auf jedes Fenster per Namen und wurden bewusst nicht erlaubt.
+Belege: Test `twitch_fenster_haben_nur_fenstersteuerung` erlaubt jetzt genau `core:window:allow-*` und `allow-show-menu`; Probe im Debug-Build (`STREAMDOCK_PROBE`) aus Player und Chat: alle anderen App-Befehle weiter abgewiesen, `show_menu` erlaubt. Funktionsprüfung mit echten Mausklicks im Debug-Build: Menü kommt nach vorn und hat den Fokus, Vollbild und Immer-oben des Players werden aufgehoben, Player und Chat bleiben offen.
+
 ## Blast Radius
 
 - `store::dir` / `local_dir`: 17 Aufrufer in `stream.rs` und `twitch.rs` (Token, Einstellungen, Fensterlage, Browserprofil, Erweiterungen). Der Override wirkt nur im Debug-Build, im Release liefert `override_dir` immer `None`.
