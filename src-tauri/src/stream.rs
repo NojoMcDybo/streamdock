@@ -11,7 +11,7 @@ use tauri::{
     AppHandle, LogicalSize, Manager, PhysicalPosition, Theme, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent,
 };
 
-use crate::store;
+use crate::{stats, store};
 
 /// Vorsilben der Fensternamen; jede Sitzung bekommt eine Nummer dahinter (`player-3`), weil ein eben zerstörtes
 /// Fenster seinen Namen noch kurz belegt und ein Streamwechsel sonst scheitert.
@@ -112,20 +112,33 @@ fn nav_allowed(url: &Url) -> bool {
 /// Ordner für entpackte Browser-Erweiterungen (je Erweiterung ein Unterordner mit `manifest.json`), nur wenn
 /// mindestens eine drin liegt. Ohne Ordner läuft alles wie bisher, ohne Erweiterungen.
 fn extensions_dir(app: &AppHandle) -> Option<PathBuf> {
-    let dir = app.path().app_local_data_dir().ok()?.join("extensions");
+    let dir = store::local_dir(app).ok()?.join("extensions");
     let has_extension = std::fs::read_dir(&dir).ok()?.flatten().any(|e| e.path().join("manifest.json").is_file());
     has_extension.then_some(dir)
 }
 
+/// Oberfläche über dem Bild (overlay.js) mit den Nojo-Symbolen eingesetzt.
+fn overlay_script() -> String {
+    include_str!("overlay.js")
+        .replace("__ICON_CLOSE__", include_str!("../../src/nojo/icons/close.svg").trim())
+        .replace("__ICON_MIN__", include_str!("../../src/nojo/icons/min.svg").trim())
+        .replace("__ICON_FULLSCREEN_EXIT__", include_str!("../../src/nojo/icons/fullscreen-exit.svg").trim())
+        .replace("__ICON_FULLSCREEN__", include_str!("../../src/nojo/icons/fullscreen.svg").trim())
+        .replace("__ICON_PIN__", include_str!("../../src/nojo/icons/pin.svg").trim())
+}
+
 fn make(app: &AppHandle, label: &str, url: Url, title: &str, (x, y, w, h): (f64, f64, f64, f64), ext: Option<&Path>) -> tauri::Result<WebviewWindow> {
     // Eigenes Browserprofil für Twitch: Anmeldung und Cookies bleiben von der App-Oberfläche getrennt
-    let profile = app.path().app_local_data_dir()?.join("twitch");
+    let profile = store::local_dir(app).map_err(|e| tauri::Error::Io(std::io::Error::other(e)))?.join("twitch");
     let mut builder = WebviewWindowBuilder::new(app, label, WebviewUrl::External(url))
         .title(title)
         .inner_size(w, h)
         .position(x, y)
         .min_inner_size(300.0, 200.0)
         .theme(Some(Theme::Dark))
+        .decorations(false) // keine Titelleiste: Steuerung und Ziehen kommen aus overlay.js über dem Bild
+        .shadow(true)
+        .initialization_script(overlay_script())
         .data_directory(profile)
         .visible(false) // erst zeigen, wenn Lage und Andocken stehen
         .on_navigation(nav_allowed)
@@ -152,8 +165,17 @@ fn open(app: &AppHandle, label: &str, url: Url, title: &str, rect: (f64, f64, f6
     }
 }
 
+/// Nur Debug-Build mit `STREAMDOCK_MUTED=1`: Tests ohne Ton.
+fn debug_muted(url: Url) -> Url {
+    if cfg!(debug_assertions) && std::env::var_os("STREAMDOCK_MUTED").is_some() {
+        return url.as_str().replace("muted=false", "muted=true").parse().unwrap_or(url);
+    }
+    url
+}
+
 /// Beendet Player und Chat.
 pub fn stop(app: &AppHandle) {
+    stats::end(app);
     if let Some(flag) = CURRENT.lock().ok().and_then(|mut g| g.take()) {
         flag.store(true, Ordering::SeqCst); // die Fenster werden gleich beide von hier zerstört
     }
@@ -171,7 +193,7 @@ pub fn start(app: &AppHandle, input: &str) -> Result<(), String> {
     stop(app);
     let err = |e: tauri::Error| e.to_string();
     let n = SESSION_NO.fetch_add(1, Ordering::SeqCst) + 1;
-    let player = open(app, &format!("{PLAYER}-{n}"), player_url(&ch), &format!("{ch} – Streamdock"), (40.0, 40.0, 1120.0, 700.0)).map_err(err)?;
+    let player = open(app, &format!("{PLAYER}-{n}"), debug_muted(player_url(&ch)), &format!("{ch} – Streamdock"), (40.0, 40.0, 1120.0, 700.0)).map_err(err)?;
     let chat = open(app, &format!("{CHAT}-{n}"), chat_url(&ch), &format!("Chat {ch}"), (1160.0, 40.0, 380.0, 700.0)).map_err(err)?;
     if let Some(l) = store::read::<Layout>(app, "layout.json").filter(|l| layout_ok(l, &monitors(app))) {
         restore(app, &player, &chat, &l);
@@ -180,6 +202,7 @@ pub fn start(app: &AppHandle, input: &str) -> Result<(), String> {
     let _ = player.show();
     let _ = chat.show();
     let _ = player.set_focus();
+    stats::begin(app, &ch); // ab jetzt zählt die Schauzeit dieses Kanals
     // Schließt eins, schließt das andere mit. Die gemeinsame Marke verhindert, dass sich beide Fenster
     // gegenseitig mitten im Zerstören noch einmal zerstören (das hing den UI-Thread beim Streamwechsel auf).
     let closing = Arc::new(AtomicBool::new(false));
@@ -192,6 +215,7 @@ pub fn start(app: &AppHandle, input: &str) -> Result<(), String> {
             WindowEvent::CloseRequested { .. } => save_layout(&app, &p, &c),
             WindowEvent::Destroyed => {
                 if !closing.swap(true, Ordering::SeqCst) {
+                    stats::end(&app);
                     let _ = other.destroy();
                 }
             }
@@ -199,14 +223,38 @@ pub fn start(app: &AppHandle, input: &str) -> Result<(), String> {
         });
     }
     #[cfg(debug_assertions)]
+    if let Some(path) = std::env::var_os("STREAMDOCK_EVAL_FILE") {
+        // Nur Debug-Build: jedes Mal, wenn die Datei sich ändert, wird ihr Inhalt in Player und Chat ausgeführt
+        // (Tests ohne Maus; Ergebnisse als Seitentitel im Log).
+        let windows = [player.clone(), chat.clone()];
+        std::thread::spawn(move || {
+            let mut last = None;
+            while windows.iter().all(|w| w.is_visible().is_ok()) {
+                let stamp = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
+                if stamp.is_some() && stamp != last {
+                    last = stamp;
+                    if let Ok(js) = std::fs::read_to_string(&path) {
+                        windows.iter().for_each(|w| drop(w.eval(&js)));
+                    }
+                }
+                std::thread::sleep(std::time::Duration::from_millis(400));
+            }
+        });
+    }
+    #[cfg(debug_assertions)]
     if std::env::var_os("STREAMDOCK_PROBE").is_some() {
-        // Prüft, ob die Twitch-Seite Befehle der App aufrufen kann: Ergebnis erscheint als Seitentitel im Log
-        let probe = "(async()=>{const i=window.__TAURI_INTERNALS__;if(!i||!i.invoke){document.title='PROBE kein-IPC';return}\
-            try{await i.invoke('start_stream',{channel:'probe'});document.title='PROBE IPC-OFFEN'}catch(e){document.title='PROBE abgewiesen: '+e}})()";
+        // Prüft, was die Twitch-Seite über die Brücke aufrufen darf: Ergebnis erscheint als Seitentitel im Log.
+        // Erwartet: App-Befehle und Ereignisse abgewiesen, Fenstersteuerung erlaubt.
+        let probe = r#"(async()=>{const I=window.__TAURI_INTERNALS__;if(!I||!I.invoke){document.title='PROBE kein-IPC';return}
+            const label=I.metadata.currentWindow.label;const out=[];
+            const tries=[['start_stream',{channel:'%%'}],['twitch_state',{}],['live_streams',{}],['logout',{}],['update_install',{}],['open_console',{}],
+              ['plugin:window|set_title',{label,value:'x'}],['plugin:window|hide',{label:'main'}],['plugin:event|listen',{event:'auth',target:{kind:'Any'},handler:1}],
+              ['plugin:window|set_always_on_top',{label,value:false}],['plugin:window|set_fullscreen',{label,value:false}]];
+            for(const [c,a] of tries){try{await I.invoke(c,a);out.push(c+'=ERLAUBT')}catch(e){out.push(c+'='+(/not allowed|denied|Plugin not found|permission/i.test(String(e))?'abgewiesen':'Fehler:'+String(e).slice(0,30)))}}
+            document.title='PROBE '+out.join(' | ');})()"#;
         let _ = player.eval(probe);
         let _ = chat.eval(probe);
-    }
-    Ok(())
+    }    Ok(())
 }
 
 #[cfg(test)]

@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use crate::stats;
 use crate::store;
 use tauri::{AppHandle, Emitter};
 
@@ -29,6 +30,8 @@ pub struct Stream {
     pub thumbnail: String,
     pub avatar: String,
     pub started_at: String,
+    /// Wie lange du diesen Kanal schon geschaut hast (Sekunden), Grundlage der Sortierung
+    pub watched: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
@@ -150,11 +153,13 @@ fn thumb_url(template: &str) -> String {
     template.replace("{width}", "440").replace("{height}", "248")
 }
 
-/// Anzeigeliste: meistgesehene zuerst.
-fn build_streams(raw: Vec<Raw>, avatars: &HashMap<String, String>) -> Vec<Stream> {
+/// Anzeigeliste: am längsten von dir geschaut zuerst (deine Favoriten), danach nach Zuschauerzahl.
+/// `watched`: Kanal → Sekunden aus `stats`.
+fn build_streams(raw: Vec<Raw>, avatars: &HashMap<String, String>, watched: &HashMap<String, u64>) -> Vec<Stream> {
     let mut v: Vec<Stream> = raw
         .into_iter()
         .map(|r| Stream {
+            watched: watched.get(&r.login).copied().unwrap_or(0), // vor `login`, das unten verschoben wird
             avatar: avatars.get(&r.id).map(|u| avatar_url(u)).unwrap_or_default(),
             thumbnail: thumb_url(&r.thumbnail),
             name: if r.name.is_empty() { r.login.clone() } else { r.name },
@@ -165,7 +170,7 @@ fn build_streams(raw: Vec<Raw>, avatars: &HashMap<String, String>) -> Vec<Stream
             started_at: r.started_at,
         })
         .collect();
-    v.sort_by(|a, b| b.viewers.cmp(&a.viewers).then_with(|| a.login.cmp(&b.login)));
+    v.sort_by(|a, b| b.watched.cmp(&a.watched).then_with(|| b.viewers.cmp(&a.viewers)).then_with(|| a.login.cmp(&b.login)));
     v
 }
 
@@ -274,7 +279,7 @@ fn live_blocking(app: &AppHandle, avatars_wanted: bool) -> Result<Vec<Stream>, S
             avatars.extend(parse_users(&v));
         }
     }
-    Ok(build_streams(raw, &avatars))
+    Ok(build_streams(raw, &avatars, &stats::seconds(&stats::load(app))))
 }
 
 // ---------- Befehle (nur für das Hauptfenster) ----------
@@ -460,7 +465,7 @@ mod tests {
             {"id": "20", "profile_image_url": "https://static-cdn.jtvnw.net/jtv_user_pictures/ab-profile_image-300x300.png"},
             {"id": "", "profile_image_url": "x"}, {"id": "10", "profile_image_url": ""}]}));
         assert_eq!(avatars.len(), 1);
-        let list = build_streams(raw, &avatars);
+        let list = build_streams(raw, &avatars, &HashMap::new());
         assert_eq!(list.iter().map(|s| s.login.as_str()).collect::<Vec<_>>(), ["caedrel", "klein"]);
         assert_eq!(list[0].avatar, "https://static-cdn.jtvnw.net/jtv_user_pictures/ab-profile_image-150x150.png");
         assert_eq!(list[0].thumbnail, "https://x/y-440x248.jpg");
@@ -469,9 +474,18 @@ mod tests {
     }
 
     #[test]
+    fn favoriten_stehen_vor_der_zuschauerzahl() {
+        let r = |l: &str, v: u64| Raw { id: String::new(), login: l.into(), name: String::new(), game: String::new(), title: String::new(), viewers: v, thumbnail: String::new(), started_at: String::new() };
+        let watched: HashMap<String, u64> = [("klein".to_string(), 7200), ("mittel".to_string(), 600)].into();
+        let list = build_streams(vec![r("gross", 50_000), r("mittel", 500), r("klein", 5), r("noch", 70_000)], &HashMap::new(), &watched);
+        assert_eq!(list.iter().map(|s| s.login.as_str()).collect::<Vec<_>>(), ["klein", "mittel", "noch", "gross"]);
+        assert_eq!((list[0].watched, list[3].watched), (7200, 0));
+    }
+
+    #[test]
     fn gleiche_zuschauer_sortieren_nach_name() {
         let r = |l: &str| Raw { id: String::new(), login: l.into(), name: String::new(), game: String::new(), title: String::new(), viewers: 5, thumbnail: String::new(), started_at: String::new() };
-        let list = build_streams(vec![r("b"), r("a")], &HashMap::new());
+        let list = build_streams(vec![r("b"), r("a")], &HashMap::new(), &HashMap::new());
         assert_eq!(list[0].login, "a");
     }
 

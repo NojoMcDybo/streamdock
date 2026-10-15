@@ -61,6 +61,7 @@ fn fake_list(step: u32) -> Vec<Stream> {
         thumbnail: String::new(),
         avatar: String::new(),
         started_at: String::new(),
+        watched: 0,
     };
     let mut v = vec![s("alpha", 1200), s("bravo", 80)];
     if step >= 1 {
@@ -91,6 +92,7 @@ pub fn spawn(app: AppHandle) {
         let mut step = 0;
         std::thread::sleep(every.min(Duration::from_secs(8))); // die App erst hochkommen lassen
         loop {
+            crate::stats::flush(&app); // Schauzeit des laufenden Streams buchen (ein Absturz verliert so höchstens eine Minute)
             match poll(&app, step) {
                 Some(Ok(list)) => {
                     let new = seen.update(&list, Instant::now());
@@ -125,6 +127,7 @@ mod tests {
             thumbnail: String::new(),
             avatar: String::new(),
             started_at: String::new(),
+            watched: 0,
         }
     }
 

@@ -103,8 +103,12 @@ Eigenständige Tauri-2-App für Windows. Ersetzt das AutoHotkey-Skript `D:\Dev\t
 | Erste Rust-Übersetzung dauert lang | niedrig | im Hintergrund starten, parallel weiterarbeiten |
 | Prüfung der Anmeldung nur teilweise möglich (kein echtes Konto in meiner Sitzung) | mittel | Parser/Fehlerfälle testen, Erfolgsfall vom Nutzer prüfen lassen und offen benennen |
 
-## Offen (nicht in dieser Runde)
+## Stand nach 0.2.0
 
-- Chrome-Erweiterungen/Werbeblocker: Spike, ob `browser_extensions_enabled`/`extensions_path` in Tauri/wry auf diesem Stand vorhanden ist.
-- „X ist live“-Benachrichtigung im Tray (Abfrage etwa jede Minute).
-- Runde Bilder als Lichtring, Vorschau beim Überfahren, mehrere Streams.
+Erledigt seit dem ersten Plan: Tray mit Live-Liste und „X ist live“-Meldung, Selbst-Update, Mehrmonitor-Betrieb, Erweiterungsordner (Laden getestet), Fenster ohne Leiste mit Glas-Pille, Favoriten-Sortierung nach Schauzeit, Werbung stummschalten, neue Einrichtung (Kopierknöpfe, Farbspiel), neues Symbol. Rechte der Twitch-Fenster auf Fenstersteuerung beschränkt (App-Manifest), Prüfung in `tasks/security-review-0.2.0.md`.
+
+## Offen
+
+- Werbung: nur Stummschaltung (Erkennung mit echter Werbung nicht beobachtet, in 9 Minuten kam keine). Entfernen/Überspringen bewusst nicht gebaut (siehe README, Abschnitt Grenzen).
+- Ziehen und Größe ändern der Fenster ohne Leiste mit echter Maus ungetestet (Schnittstelle erlaubt und geprüft, Knöpfe geklickt).
+- Ideen (nach Wert und Aufwand in der Sitzung besprochen): Meldung anklickbar, Mit Windows starten, Zeitplan-Erinnerungen, Statistik der Lieblingskanäle, Sleep-Timer, globale Tastenkürzel, mehrere Streams.

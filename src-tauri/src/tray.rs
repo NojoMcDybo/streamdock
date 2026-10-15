@@ -132,6 +132,7 @@ mod tests {
             thumbnail: String::new(),
             avatar: String::new(),
             started_at: String::new(),
+            watched: 0,
         }
     }
 

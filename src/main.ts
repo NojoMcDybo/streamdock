@@ -25,12 +25,6 @@ function h<K extends keyof HTMLElementTagNameMap>(tag: K, cls = "", text = ""): 
   return e;
 }
 
-/** `**fett**` im Text als <b>, alles andere als Text. */
-function rich(parent: HTMLElement, text: string) {
-  text.split("**").forEach((part, i) => parent.append(i % 2 ? h("b", "", part) : document.createTextNode(part)));
-  return parent;
-}
-
 const CDN = /^https:\/\/[a-z0-9.-]+\.jtvnw\.net\//;
 function image(src: string): HTMLImageElement | null {
   if (!CDN.test(src) && !src.startsWith("data:image/svg+xml,")) return null;
@@ -42,6 +36,9 @@ function image(src: string): HTMLImageElement | null {
   i.addEventListener("error", () => i.remove());
   return i;
 }
+
+/** Schauzeit kurz: 40 Min., 2,5 Std., 12 Std. */
+const fmtTime = (s: number) => (s < 3600 ? `${Math.max(1, Math.round(s / 60))} Min.` : s < 36000 ? `${(s / 3600).toFixed(1).replace(".", ",")} Std.` : `${Math.round(s / 3600)} Std.`);
 
 const fmt = (n: number) => (n >= 10_000 ? `${(n / 1000).toLocaleString("de", { maximumFractionDigits: 1 })} Tsd.` : n.toLocaleString("de"));
 
@@ -82,22 +79,64 @@ function stopTimer() {
   seq++;
 }
 
+/** Hinter Anmelde- und Einrichtungsansichten bewegt sich ein lila Farbspiel (wie bei Twitch), in der Liste ist es aus. */
+const setAuth = (on: boolean) => document.body.classList.toggle("auth", on);
+
+/** Vorschlag für den Namen der Twitch-Anwendung: „twitch“ ist verboten, der Name muss weltweit eindeutig sein. */
+function appName() {
+  const make = () => "streamdock-" + Math.floor(1000 + Math.random() * 9000);
+  try {
+    let n = localStorage.getItem("sd-app-name");
+    if (!n) localStorage.setItem("sd-app-name", (n = make()));
+    return n;
+  } catch {
+    return make();
+  }
+}
+
+/** Wert mit Kopierknopf: ein Klick legt ihn in die Zwischenablage. */
+function chip(key: string, value: string) {
+  const b = h("button", "chip");
+  b.type = "button";
+  b.title = "Kopieren";
+  b.append(h("span", "k", key), h("span", "v", value), iconNode("copy", { cls: "cp" }), iconNode("check", { cls: "chk" }));
+  b.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      const t = h("textarea");
+      t.value = value;
+      document.body.append(t);
+      t.select();
+      document.execCommand("copy");
+      t.remove();
+    }
+    b.classList.add("ok");
+    setTimeout(() => b.classList.remove("ok"), 1400);
+  });
+  return b;
+}
+
+function step(n: number, label: string, ...body: Node[]) {
+  const s = h("div", "step");
+  const inner = h("div", "sbody");
+  inner.append(h("b", "", label), ...body);
+  s.append(h("i", "num", String(n)), inner);
+  return s;
+}
+
 function showSetup(msg = "") {
   stopTimer();
+  setAuth(true);
   count.textContent = "Einrichten";
-  const intro = h("p", "", "Streamdock liest nur, welche deiner gefolgten Kanäle live sind. Dafür braucht es einmalig eine eigene Twitch-Anwendung, kostenlos.");
-  const steps = h("ol");
-  for (const s of [
-    "Auf **dev.twitch.tv** eine Anwendung registrieren.",
-    "Name **ohne „twitch“**, Weiterleitungs-URL **https://localhost**, Kategorie **Application Integration**, Clienttyp **Öffentlich**.",
-    "Die **Client-ID** kopieren und hier einfügen.",
-  ]) {
-    const li = h("li");
-    li.append(rich(h("span"), s)); // eigenes Element, damit der Zähler (::before) und der Text zwei Spalten bleiben
-    steps.append(li);
-  }
+  const open = h("button", "n-btn primary");
+  open.type = "button";
+  open.append("Twitch-Konsole öffnen", iconNode("external"));
+  open.addEventListener("click", () => void api.openConsole());
+  const chips = h("div", "chips");
+  chips.append(chip("Name", appName()), chip("Weiterleitungs-URL", "https://localhost"), chip("Kategorie", "Application Integration"), chip("Clienttyp", "Öffentlich"));
   const input = h("input", "n-input");
-  input.placeholder = "Client-ID";
+  input.placeholder = "Client-ID einfügen";
   input.spellcheck = false;
   input.setAttribute("aria-label", "Client-ID");
   const err = h("div", "msg", msg);
@@ -112,12 +151,17 @@ function showSetup(msg = "") {
   input.addEventListener("keydown", (e) => e.key === "Enter" && go());
   const row = h("div", "row");
   row.append(input, button("Verbinden", go, true));
-  show(note("Mit Twitch verbinden", intro, steps, button("Konsole öffnen", () => void api.openConsole()), row, err));
+  const steps = h("div", "steps");
+  steps.append(step(1, "Konsole öffnen", open), step(2, "Anwendung registrieren, Werte per Klick kopieren", chips), step(3, "Client-ID einfügen", row, err));
+  const n = note("Mit Twitch verbinden", h("p", "", "Einmalig eine eigene Twitch-App anlegen, dauert etwa eine Minute."), steps);
+  n.classList.add("wide");
+  show(n);
   input.focus();
 }
 
 function showLogin(msg = "") {
   stopTimer();
+  setAuth(true);
   count.textContent = "Anmelden";
   const err = h("div", "msg", msg);
   const start = button("Mit Twitch anmelden", async () => {
@@ -127,24 +171,25 @@ function showLogin(msg = "") {
       err.textContent = String(e);
     }
   }, true);
-  show(note("Bei Twitch anmelden", h("p", "", "Du bestätigst die Anmeldung kurz im Browser. Streamdock bekommt nur Leserechte auf deine gefolgten Kanäle."), start, err));
+  show(note("Bei Twitch anmelden", h("p", "", "Ein Klick, dann im Browser bestätigen."), start, err));
   start.focus();
 }
 
 function showCode(a: { userCode: string; verificationUri: string }) {
   stopTimer();
+  setAuth(true);
   count.textContent = "Anmelden";
   show(note(
     "Im Browser bestätigen",
     h("div", "big", a.userCode),
-    h("p", "", "Der Browser wurde geöffnet. Bestätige dort die Anmeldung. Falls nichts erscheint, öffne twitch.tv/activate und gib den Code ein."),
+    h("p", "", "Kein Fenster aufgegangen? twitch.tv/activate öffnen und den Code eingeben."),
     h("span", "pulse"),
     button("Abbrechen", () => void api.authCancel().then(() => showLogin())),
   ));
 }
-
 function showError(msg: string) {
   stopTimer();
+  setAuth(false);
   count.textContent = "Live";
   const n = note("Das hat nicht geklappt", h("p", "", msg), button("Erneut versuchen", () => void route(), true));
   n.classList.add("err");
@@ -152,11 +197,13 @@ function showError(msg: string) {
 }
 
 function showEmpty() {
+  setAuth(false);
   count.textContent = "0 live";
   show(note("Gerade ist niemand live", h("p", "", "Von den Kanälen, denen du folgst, streamt im Moment keiner."), button("Aktualisieren", () => void refresh(true))));
 }
 
 function skeleton() {
+  setAuth(false);
   const g = h("div", "grid");
   for (let i = 0; i < 8; i++) g.append(h("div", "skel"));
   show(g);
@@ -166,11 +213,12 @@ function card(s: Stream) {
   const c = h("button", "card");
   c.type = "button";
   c.dataset.login = s.login;
-  c.title = `${s.name} öffnen`;
+  c.title = s.watched >= 60 ? `${s.name} öffnen · ${fmtTime(s.watched)} von dir geschaut` : `${s.name} öffnen`;
   const thumb = h("div", "thumb");
   const t = image(s.thumbnail);
   if (t) thumb.append(t);
   thumb.append(h("span", "live-badge", "LIVE"), h("span", "viewers", fmt(s.viewers)));
+  if (s.watched >= 60) thumb.append(h("span", "fav", `★ ${fmtTime(s.watched)}`));
   const ava = h("div", "ava");
   const a = image(s.avatar);
   if (a) ava.append(a);
@@ -197,12 +245,18 @@ async function refresh(initial: boolean) {
     if (!list.length) return showEmpty();
     const focus = (document.activeElement as HTMLElement | null)?.dataset?.login;
     const grid = h("div", "grid");
-    list.forEach((s) => grid.append(card(s)));
+    const favs = list.filter((s) => s.watched >= 60); // Liste kommt schon nach Schauzeit sortiert
+    const both = favs.length > 0 && favs.length < list.length;
+    if (both) grid.append(h("div", "group n-eyebrow", "Deine Favoriten"));
+    list.forEach((s, i) => {
+      if (both && i === favs.length) grid.append(h("div", "group n-eyebrow", "Weitere live"));
+      grid.append(card(s));
+    });
     show(grid);
     shown = list.length;
     count.textContent = `${list.length} live`;
     const typing = document.activeElement instanceof HTMLInputElement;
-    const target = (focus && grid.querySelector<HTMLElement>(`[data-login="${CSS.escape(focus)}"]`)) || (!typing && initial ? grid.firstElementChild : null);
+    const target = (focus && grid.querySelector<HTMLElement>(`[data-login="${CSS.escape(focus)}"]`)) || (!typing && initial ? grid.querySelector(".card") : null);
     (target as HTMLElement | null)?.focus({ preventScroll: true });
   } catch (e) {
     if (mine !== seq) return;
@@ -298,21 +352,45 @@ $("logout").addEventListener("click", async () => {
   showLogin();
 });
 
-// Pfeiltasten bewegen den Fokus durch das Raster, Enter startet (Knopf)
+// Pfeiltasten bewegen den Fokus zur nächsten Karte in dieser Richtung (nach Lage, auch über Gruppenköpfe hinweg), Enter startet
+const mid = (el: HTMLElement) => {
+  const r = el.getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2, h: r.height };
+};
+
+function neighbour(cur: HTMLElement, key: string): HTMLElement | null {
+  const a = mid(cur);
+  let best: HTMLElement | null = null;
+  let bestScore = Infinity;
+  for (const o of document.querySelectorAll<HTMLElement>(".card")) {
+    if (o === cur) continue;
+    const b = mid(o);
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const sameRow = Math.abs(dy) < a.h / 2;
+    const [ok, score] =
+      key === "ArrowRight" ? [sameRow && dx > 4, dx]
+      : key === "ArrowLeft" ? [sameRow && dx < -4, -dx]
+      : key === "ArrowDown" ? [dy > a.h / 2, dy * 1000 + Math.abs(dx)]
+      : [dy < -a.h / 2, -dy * 1000 + Math.abs(dx)];
+    if (ok && score < bestScore) {
+      best = o;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") return closePop();
-  const keys = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"];
-  const cards = [...document.querySelectorAll<HTMLElement>(".card")];
-  const i = cards.indexOf(document.activeElement as HTMLElement);
-  if (!keys.includes(e.key) || i < 0) return;
-  const cols = cards.filter((c) => c.offsetTop === cards[0].offsetTop).length || 1;
-  const next = { ArrowLeft: i - 1, ArrowRight: i + 1, ArrowUp: i - cols, ArrowDown: i + cols }[e.key as "ArrowLeft"];
-  if (next >= 0 && next < cards.length) {
+  const cur = document.activeElement as HTMLElement | null;
+  if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key) || !cur?.classList.contains("card")) return;
+  const next = neighbour(cur, e.key);
+  if (next) {
     e.preventDefault();
-    cards[next].focus();
+    next.focus();
   }
 });
-
 void (async () => {
   api = await loadApi();
   await api.onAuth(onAuth);

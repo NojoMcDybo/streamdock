@@ -11,6 +11,8 @@ export type Stream = {
   thumbnail: string;
   avatar: string;
   startedAt: string;
+  /** Sekunden, die du diesen Kanal geschaut hast (Sortierung: Favoriten zuerst) */
+  watched: number;
 };
 export type TwitchState = { clientId: boolean; loggedIn: boolean };
 export type AuthStart = { userCode: string; verificationUri: string };

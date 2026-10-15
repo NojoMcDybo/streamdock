@@ -1,5 +1,6 @@
 mod dock;
 mod dock_win;
+mod stats;
 mod store;
 mod stream;
 mod tray;
@@ -100,6 +101,72 @@ pub fn run() {
             }
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("Streamdock konnte nicht starten");
+        .build(tauri::generate_context!())
+        .expect("Streamdock konnte nicht starten")
+        .run(|app, event| {
+            // Beenden über das Tray-Menü: die laufende Schauzeit noch buchen
+            if let tauri::RunEvent::Exit = event {
+                stats::end(app);
+            }
+        });
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    /// Wer einen Befehl ergänzt, muss ihn in `build.rs` (App-Manifest) UND in `capabilities/default.json` eintragen,
+    /// sonst ist er für das Hauptfenster gesperrt. Umgekehrt darf nichts erlaubt sein, was es nicht gibt.
+    #[test]
+    fn befehle_sind_in_build_und_berechtigungen_eingetragen() {
+        let src = include_str!("lib.rs");
+        let handler: BTreeSet<String> = src
+            .split("generate_handler![")
+            .nth(1)
+            .and_then(|s| s.split(']').next())
+            .expect("generate_handler")
+            .split(',')
+            .map(|c| c.trim().rsplit("::").next().unwrap().to_string())
+            .filter(|c| !c.is_empty())
+            .collect();
+
+        let build: BTreeSet<String> = include_str!("../build.rs")
+            .split("commands(&[")
+            .nth(1)
+            .and_then(|s| s.split(']').next())
+            .expect("commands")
+            .split('"')
+            .skip(1)
+            .step_by(2)
+            .map(String::from)
+            .collect();
+
+        let caps: serde_json::Value = serde_json::from_str(include_str!("../capabilities/default.json")).unwrap();
+        let allowed: BTreeSet<String> = caps["permissions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|p| p.as_str()?.strip_prefix("allow-").map(|c| c.replace('-', "_")))
+            .collect();
+
+        assert_eq!(handler, build, "Befehle im Handler und in build.rs");
+        assert_eq!(handler, allowed, "Befehle im Handler und in capabilities/default.json");
+        assert!(handler.len() >= 10);
+    }
+
+    /// Fenster mit Twitch-Inhalt dürfen nur Fenstersteuerung, keine App-Befehle und keine Ereignisse.
+    #[test]
+    fn twitch_fenster_haben_nur_fenstersteuerung() {
+        let caps: serde_json::Value = serde_json::from_str(include_str!("../capabilities/twitch-windows.json")).unwrap();
+        let perms: Vec<&str> = caps["permissions"].as_array().unwrap().iter().filter_map(|p| p.as_str()).collect();
+        assert!(!perms.is_empty());
+        for p in &perms {
+            assert!(p.starts_with("core:window:allow-"), "unerwartete Berechtigung für Twitch-Fenster: {p}");
+        }
+        for forbidden in ["allow-hide", "allow-set-title", "allow-destroy", "allow-set-focus", "allow-set-position"] {
+            assert!(!perms.iter().any(|p| p.ends_with(forbidden)), "{forbidden} darf nicht erlaubt sein");
+        }
+        assert_eq!(caps["remote"]["urls"], serde_json::json!(["https://*.twitch.tv/*", "https://twitch.tv/*"]));
+        assert_eq!(caps["windows"], serde_json::json!(["player-*", "chat-*"]));
+    }
 }

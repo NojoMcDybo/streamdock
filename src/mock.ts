@@ -27,7 +27,8 @@ const streams: Stream[] = people.map(([login, name, game, title, viewers], i) =>
   thumbnail: svg(hues[i % 8], "#1c1c1e", name[0]),
   avatar: svg(hues[(i + 3) % 8], hues[i % 8], name[0]),
   startedAt: "2026-10-15T10:00:00Z",
-}));
+  watched: [43200, 9000, 0, 2400, 0, 0, 0, 0][i] ?? 0,
+})).sort((a, b) => b.watched - a.watched || b.viewers - a.viewers); // wie im Backend: Favoriten zuerst
 
 let authCb: ((e: AuthEvent) => void) | null = null;
 
