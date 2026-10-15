@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Streamdock</title>
+    <link rel="stylesheet" href="/src/nojo/nojo-ui.css" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <script type="module" src="/src/main.ts" defer></script>
+  </head>
+  <body class="n-window">
+    <!-- rahmenloses Fenster: oben ziehen, Fensterknöpfe rechts als Glas (wie in den anderen Apps) -->
+    <div class="n-dragbar" data-tauri-drag-region></div>
+
+    <!-- Kopfleiste schwebt als Glas über der Liste: die Karten laufen beim Scrollen darunter durch -->
+    <header class="bar n-glass n-liquid panel" id="bar" data-tauri-drag-region>
+      <div class="brand" data-tauri-drag-region>
+        <svg data-icon="video" class="n-i"></svg>
+        <div data-tauri-drag-region>
+          <div class="n-eyebrow" data-tauri-drag-region>Streamdock</div>
+          <div class="count n-display" id="count" data-tauri-drag-region>Live</div>
+        </div>
+      </div>
+      <form class="open" id="open" autocomplete="off">
+        <input class="n-input" id="channel" placeholder="Kanal oder Link öffnen …" spellcheck="false" aria-label="Kanal oder Link" />
+        <button class="n-btn primary" type="submit">Öffnen</button>
+      </form>
+      <div class="tools">
+        <button class="n-ico sm" id="refresh" title="Aktualisieren" aria-label="Aktualisieren"><svg data-icon="refresh"></svg></button>
+        <button class="n-ico sm" id="gear" title="Einstellungen" aria-label="Einstellungen"><svg data-icon="settings"></svg></button>
+      </div>
+    </header>
+
+    <div class="pop n-glass n-liquid panel" id="pop" hidden>
+      <div class="upd">
+        <span id="upd-text"></span>
+        <button class="n-btn" id="upd-btn" type="button">Nach Updates suchen</button>
+      </div>
+      <button class="n-btn" id="change-id">Client-ID ändern</button>
+      <button class="n-btn" id="logout">Von Twitch abmelden</button>
+    </div>
+
+    <main id="list" class="n-scroll"><div id="view"></div></main>
+  </body>
+</html>

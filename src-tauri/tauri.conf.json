@@ -1,0 +1,47 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Streamdock",
+  "version": "0.1.0",
+  "identifier": "de.nojo.streamdock",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1442",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Streamdock",
+        "width": 960,
+        "height": 700,
+        "minWidth": 640,
+        "minHeight": 480,
+        "decorations": false,
+        "transparent": false,
+        "backgroundColor": "#1c1c1e",
+        "visible": false,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data: https://*.jtvnw.net; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src ipc: http://ipc.localhost",
+      "devCsp": null
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFCRjZEODM0MzVBQjU4MjYKUldRbVdLczFOTmoycTlIeEIzNEt5NHZ3aXU1RGZFcUI3NCtSWFRoSE01NE9ZM2x6bU0ybjFXeXoK",
+      "endpoints": ["https://github.com/NojoMcDybo/streamdock/releases/latest/download/latest.json"],
+      "windows": { "installMode": "passive" }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "createUpdaterArtifacts": true,
+    "targets": ["nsis"],
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"]
+  }
+}
